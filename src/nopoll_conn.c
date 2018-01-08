@@ -571,31 +571,44 @@ int nopoll_conn_tls_send (noPollConn * conn, char * buffer, int buffer_size)
 }
 
 
+
 SSL_CTX * __nopoll_conn_get_ssl_context (noPollCtx * ctx, noPollConn * conn, noPollConnOpts * opts, nopoll_bool is_client)
 {
+
 	/* call to user defined function if the context creator is defined */
 	if (ctx && ctx->context_creator) 
 		return ctx->context_creator (ctx, conn, opts, is_client, ctx->context_creator_data);
 
 	if (opts == NULL) {
+
 		/* select a default mechanism according to what's
-		 * available, starting from the most common accepted
-		 * solution, which is TLSv1.0 */
-#if defined(NOPOLL_HAVE_TLSv10_ENABLED)
-		/* by default use TLSv1.0 */
-		return SSL_CTX_new (is_client ? TLSv1_client_method () : TLSv1_server_method ());
-#elif defined(NOPOLL_HAVE_TLSv11_ENABLED)
-		/* if not use TLSv1.1 */
-		return SSL_CTX_new (is_client ? TLSv1_1_client_method () : TLSv1_1_server_method ());
-#elif defined(NOPOLL_HAVE_TLSv12_ENABLED)
+		 * available: ORDER IS IMPORTANT: make it select first
+		 * strong methods over weak/old methods */
+
+#if defined(NOPOLL_HAVE_TLS_FLEXIBLE_ENABLED)
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing default tls-method=flexible conn-id=%d", conn->id);
+		/* flexible method */
+		return SSL_CTX_new (is_client ? TLS_client_method () : TLS_server_method ());
+#elif defined(NOPOLL_HAVE_TLSv12_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing default tls-method=tlsv1.2 conn-id=%d", conn->id);
 		/* if not use TLSv1.2 */
 		return SSL_CTX_new (is_client ? TLSv1_2_client_method () : TLSv1_2_server_method ());
-#elif defined(NOPOLL_HAVE_SSLv23_ENABLED)
+#elif defined(NOPOLL_HAVE_TLSv11_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing default tls-method=tlsv1.1 conn-id=%d", conn->id);
+		/* if not use TLSv1.1 */
+		return SSL_CTX_new (is_client ? TLSv1_1_client_method () : TLSv1_1_server_method ());
+#elif defined(NOPOLL_HAVE_TLSv10_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing default tls-method=tlsv1.0 conn-id=%d", conn->id);
+		/* by default use TLSv1.0 */
+		return SSL_CTX_new (is_client ? TLSv1_client_method () : TLSv1_server_method ());
+#elif defined(NOPOLL_HAVE_SSLv3_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing default tls-method=sslv3 conn-id=%d", conn->id);
+		/* if not use SSLv3 */
+		return SSL_CTX_new (is_client ? SSLv3_client_method () : SSLv3_server_method ());
+#elif defined(NOPOLL_HAVE_SSLv23_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing default tls-method=sslv23 conn-id=%d", conn->id);
 		/* if not use SSLv23 */
 		return SSL_CTX_new (is_client ? SSLv23_client_method () : SSLv23_server_method ()); 
-#elif defined(NOPOLL_HAVE_SSLv3_ENABLED)
-		/* if not use SSLv3 */
-		return SSL_CTX_new (is_client ? SSLv3_client_method () : SSLv3_server_method ()); 
 #else
 		/* no default method found */
 		return NULL;
@@ -607,43 +620,56 @@ SSL_CTX * __nopoll_conn_get_ssl_context (noPollCtx * ctx, noPollConn * conn, noP
 
 #if defined(NOPOLL_HAVE_TLS_FLEXIBLE_ENABLED)
 	case NOPOLL_METHOD_TLS_FLEXIBLE:
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing tls-method=flexible conn-id=%d", conn->id);
 		return SSL_CTX_new (is_client ? TLS_client_method () : TLS_server_method ());
 #endif		
 		
-#if defined(NOPOLL_HAVE_TLSv10_ENABLED)
+#if defined(NOPOLL_HAVE_TLSv10_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
 	case NOPOLL_METHOD_TLSV1:
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing tls-method=tlsv1.0 conn-id=%d", conn->id);
 		return SSL_CTX_new (is_client ? TLSv1_client_method () : TLSv1_server_method ());
 #endif
 		
-#if defined(NOPOLL_HAVE_TLSv11_ENABLED)
+#if defined(NOPOLL_HAVE_TLSv11_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
 	case NOPOLL_METHOD_TLSV1_1:
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing tls-method=tlsv1.1 conn-id=%d", conn->id);
 		return SSL_CTX_new (is_client ? TLSv1_1_client_method () : TLSv1_1_server_method ()); 
 #endif
 		
-#if defined(NOPOLL_HAVE_TLSv12_ENABLED)
+#if defined(NOPOLL_HAVE_TLSv12_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
 	case NOPOLL_METHOD_TLSV1_2:
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing tls-method=tlsv1.2 conn-id=%d", conn->id);
 		return SSL_CTX_new (is_client ? TLSv1_2_client_method () : TLSv1_2_server_method ()); 
 #endif
 		
-#if defined(NOPOLL_HAVE_SSLv3_ENABLED)
+#if defined(NOPOLL_HAVE_SSLv3_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
 	case NOPOLL_METHOD_SSLV3:
-		/* printf ("**** REPORTING SSLv3 ****\n"); */
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing tls-method=sslv3 conn-id=%d", conn->id);
 		return SSL_CTX_new (is_client ? SSLv3_client_method () : SSLv3_server_method ()); 
 #endif
-#if defined(NOPOLL_HAVE_SSLv23_ENABLED)
+#if defined(NOPOLL_HAVE_SSLv23_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
 	case NOPOLL_METHOD_SSLV23:
-		/* printf ("**** REPORTING SSLv23 ****\n"); */
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing tls-method=sslv23 conn-id=%d", conn->id);
 		return SSL_CTX_new (is_client ? SSLv23_client_method () : SSLv23_server_method ());
+#endif
+	default:
+	        /* default case */
+#if defined(NOPOLL_HAVE_TLS_FLEXIBLE_ENABLED)
+		nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "choosing default tls-method=flexible conn-id=%d", conn->id);
+		return SSL_CTX_new (is_client ? TLS_client_method () : TLS_server_method ());
+#else
+		return NULL;
 #endif		
 	}
 
-#if defined(NOPOLL_HAVE_TLSv10_ENABLED)
+#if defined(NOPOLL_HAVE_TLSv10_ENABLED) && OPENSSL_VERSION_NUMBER < 0x10100000L
 	/* reached this point, report default TLSv1 method */
 	return SSL_CTX_new (is_client ? TLSv1_client_method () : TLSv1_server_method ());
 #else
 	return NULL;
 #endif
 }
+
 
 noPollCtx * __nopoll_conn_ssl_ctx_debug = NULL;
 
@@ -2475,7 +2501,11 @@ char * nopoll_conn_produce_accept_key (noPollCtx * ctx, const char * websocket_k
 	int             accept_key_size;
 	int             key_length;
 	unsigned char   buffer[EVP_MAX_MD_SIZE];
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	EVP_MD_CTX      mdctx;
+#else
+	EVP_MD_CTX    * mdctx;
+#endif
 	const EVP_MD  * md = NULL;
 	unsigned int    md_len = EVP_MAX_MD_SIZE;
 
@@ -2494,9 +2524,17 @@ char * nopoll_conn_produce_accept_key (noPollCtx * ctx, const char * websocket_k
 
 	/* now sha-1 */
 	md = EVP_sha1 ();
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	EVP_DigestInit (&mdctx, md);
 	EVP_DigestUpdate (&mdctx, accept_key, strlen (accept_key));
 	EVP_DigestFinal (&mdctx, buffer, &md_len);
+#else
+	mdctx = EVP_MD_CTX_create();
+	EVP_DigestInit (mdctx, md);
+	EVP_DigestUpdate (mdctx, accept_key, strlen (accept_key));
+	EVP_DigestFinal (mdctx, buffer, &md_len);
+	EVP_MD_CTX_destroy(mdctx);
+#endif
 
 	nopoll_log (ctx, NOPOLL_LEVEL_DEBUG, "Sha-1 length is: %u", md_len);
 	/* now convert into base64 */
