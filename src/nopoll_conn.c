@@ -1280,6 +1280,29 @@ noPollConn * nopoll_conn_new_opts (noPollCtx       * ctx,
  * @param protocols Optional protocols requested to be activated for
  * this connection (an string of list of strings separated by a white
  * space).
+ *
+ * <h3>Socket ownership</h3>
+ *
+ * noPoll takes full ownership. For noPoll, there's no difference
+ * between a noPollConn created using regular API or offloaded and
+ * then used with \ref nopoll_conn_new_with_socket.
+ *
+ * However, noPoll will not close anything unless you do it (see calls
+ * to \ref nopoll_close_socket throughout the code).
+ *
+ * For noPoll, ownership here means no one is reading/writing to that
+ * socket but noPoll.
+ *
+ * <h3>Can socket passed be used with my favourite I/O loop mech?</h3>
+ *
+ * Yes.
+ *
+ * <h3>Will reading or writing from/to the socket make noPoll unsafe?</h3>
+ *
+ * Yes. Only noPoll must read and write to that socket using provided
+ * public API. Writing/reading directly will break not only noPoll
+ * sync but also remote's peer.
+ * 
  */
 noPollConn * nopoll_conn_new_with_socket (noPollCtx  * ctx,
 				   noPollConnOpts  * options,
@@ -3001,14 +3024,23 @@ void nopoll_conn_mask_content (noPollCtx * ctx, char * payload, int payload_size
  * connection. The function returns NULL in the case no message is
  * still ready to be returned. 
  *
- * The function do not block. 
+ * This function is design to not block the caller. However,
+ * connection socket must be in non-blocking configuration. If you
+ * have not configured anything, this is the default.
+ *
+ * If the function blocks caller then the socket associated to \ref
+ * noPollConn is configured to make blocking I/O (maybe because you
+ * configured like this or the socket was passed to another library
+ * that did such configuration or maybe because you are using \ref
+ * nopoll_conn_new_with_socket). 
  *
  * @param conn The connection where the read operation will take
  * place.
  * 
  * @return A reference to a noPollMsg object or NULL if there is
  * nothing available. In case the function returns NULL, check
- * connection status with \ref nopoll_conn_is_ok.
+ * connection status with \ref nopoll_conn_is_ok. If the function
+ * blocks the caller check socket configuration.
  */
 noPollMsg   * nopoll_conn_get_msg (noPollConn * conn)
 {
